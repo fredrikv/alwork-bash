@@ -3,7 +3,7 @@ alwork-bash
 
 Alwork-bash is a bash script that helps users to focus on their daily work by blocking specified web addresses a limited amount of time.
 
-Supports public humiliation by sending an email to a friend if the blocking is cancelled before the specified amount of time.
+The script supports public humiliation by sending an email to a friend if the blocking is cancelled before the specified amount of time.
 
 # Usage
 Simply install the requirements listed below and run the shell script. The following will happen:
@@ -30,13 +30,14 @@ AW_FROM_SERVER="smtp.gmail.com" # Your email server
 AW_TO_EMAIL=""
 
 # URLs to block
-BLACKLIST=(
+AW_BLACKLIST=(
 youtube.com
 www.youtube.com
 )
 ```
 
 # Requirements
+The script has only been tested under Ubuntu 14.04 with the following packages (minimum version numbers unknown):
 * iptables
 * zenity
 * sudo
