@@ -1,7 +1,7 @@
 alwork-bash
 ===========
 
-Alwork-bash is a bash script that helps users to focus on their daily work by blocking specified web addresses a limited amount of time.
+Alwork-bash is a bash script that helps users to focus on their daily work by blocking specified web addresses for a limited amount of time.
 
 The script supports public humiliation by sending an email to a friend if the blocking is cancelled before the specified amount of time.
 
@@ -12,7 +12,7 @@ Simply install the requirements listed below and run the shell script. The follo
 * The following is repeated in a loop:
   * A popup is opened in which the user can specify the amount of time (hours in decimal format) to block the URLs.
   * A 'work' progress bar and a 'Cancel' button is shown.
-  * If cancelled before the time is up and the public humiliation has been configured, the user is asked for the reason to cancel the blocking before the specified amount of time.
+  * If cancelled before the time is up and if also the public humiliation has been configured, the user is asked for the reason to cancel the blocking before the specified amount of time. The reason is then sent to the specified email addresses.
 
 
 
