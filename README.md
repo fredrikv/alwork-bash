@@ -45,3 +45,5 @@ The script has only been tested under Ubuntu 14.04 with the following packages (
 * xdg-utils (command xdg-open)
 * libnotify-bin (command notify-send)
 * sendemail (optional)
+
+For lazy Ubuntu users: `sudo apt-get install iptables zenity gksu xdg-utils libnotify-bin sendemail`
