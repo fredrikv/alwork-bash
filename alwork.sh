@@ -110,8 +110,9 @@ function remindStartLoop {
 # Send an email with the given title and message.
 function sendEmailNotification {
 	loadConfig
-	if [[ $(command -v sendemail) -eq 0 && "${AW_FROM_EMAIL}" != "" && "${AW_FROM_EMAIL_PW}" != "" && "${AW_FROM_SERVER}" != "" && "${AW_TO_EMAIL}" != "" ]]; then
-		return sendemail -f "$AW_FROM_NAME <${AW_FROM_EMAIL}>" -t "$AW_TO_EMAIL" -u "$1" -m "$2" -s $AW_FROM_SERVER -o tls="$AW_FROM_SERVER_TLS" -xu "$AW_FROM_EMAIL" -xp "$AW_FROM_EMAIL_PW" | zenity --progress --title="Sending notification" --text="Sending email notification to ${AW_TO_EMAIL}. Please wait." --pulsate --no-cancel --auto-close
+	if [[ "$(command -v sendemail)" != "" && "${AW_FROM_EMAIL}" != "" && "${AW_FROM_EMAIL_PW}" != "" && "${AW_FROM_SERVER}" != "" && "${AW_TO_EMAIL}" != "" ]]; then
+		sendemail -f "$AW_FROM_NAME <${AW_FROM_EMAIL}>" -t "$AW_TO_EMAIL" -u "$1" -m "$2" -s $AW_FROM_SERVER -o tls="$AW_FROM_SERVER_TLS" -xu "$AW_FROM_EMAIL" -xp "$AW_FROM_EMAIL_PW" | zenity --progress --title="Sending notification" --text="Sending email notification to ${AW_TO_EMAIL}. Please wait." --pulsate --no-cancel --auto-close
+		return $?
 	else
 		return 1
 	fi
