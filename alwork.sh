@@ -1,11 +1,15 @@
 #!/bin/bash
 CONF_FILE=~/.alworkbashrc
+function lastConfEdit { echo $(date -r "$CONF_FILE" +%s); }
+LAST_CONF_EDIT=0
+RELOAD_INTERVAL=5
 UUID=$(uuidgen)
+NOTIFY_LOOP_PID=0
 
 
 # Create a default config file in the home directory
 function createDefaultConfig {
-	sudo -u $(whoami) touch $CONF_FILE
+	sudo -u $(whoami) touch "$CONF_FILE"
 	echo '# Configuration of your own email address.
 # WARNING: Use a junk address and password, since this file is saved in clear text
 AW_FROM_NAME="Alwork Notifyer" # Your name
@@ -21,12 +25,12 @@ AW_TO_EMAIL=""
 AW_BLACKLIST=(
 youtube.com
 www.youtube.com
-)' >> $CONF_FILE
+)' >> "$CONF_FILE"
 
 	if [ $? -eq 0 ]; then
 		zenity --question --title="New configuration file" --text="New configuration file created. Do you want to update it?"
 		if [ $? -eq 0 ]; then
-			xdg-open $CONF_FILE
+			xdg-open "$CONF_FILE"
 		fi
 	else
 		zenity --warning --title="Error" --text="Configuration file could not be created. Closing..."
@@ -34,13 +38,19 @@ www.youtube.com
 	fi
 }
 
-# Load config file
+# Load config file if changed.
 function loadConfig {
-	source "$CONF_FILE"
-	if [ $? -ne 0 ]; then
-		createDefaultConfig
+	if [[ ( $LAST_CONF_EDIT -lt $(lastConfEdit) && $RELOAD_INTERVAL -ge 0 ) || ( $LAST_CONF_EDIT -eq 0 && $RELOAD_INTERVAL -lt 0 ) ]]; then
+		LAST_CONF_EDIT=$(lastConfEdit)
 		source "$CONF_FILE"
+		if [ $? -ne 0 ]; then
+			createDefaultConfig
+			source "$CONF_FILE"
+			return $?
+		fi
+		return 0
 	fi
+	return 1
 }
 
 # Blacklist a single website
@@ -62,12 +72,12 @@ function blacklistAll {
 
 # Sleep n.n hours while counting up to 100
 function blacklistSleepHours {
+	START=$(date +%s)
 	TOTAL=$(echo "3600*$1"|bc)
 	TOTAL=${TOTAL%.*}
-	START=$(date +%s)
 	FINISH=$(($START+$TOTAL))
-	ITERATION=0
-
+	NEXT_RELOAD=$START
+	blacklistAll
 	while [ $(date +%s) -lt $FINISH ]; do
 		CURRENT_TIME=$(date +%s)
 		ELAPSED=$(($CURRENT_TIME-$START))
@@ -76,15 +86,18 @@ function blacklistSleepHours {
 		echo $PERCENTAGE
 
 		# Reload config and blacklist every minute
-		if [ $ELAPSED -ge $(($ITERATION*60)) ]; then
+		if [ $RELOAD_INTERVAL -ge 0 ] && [ $CURRENT_TIME -ge $(($NEXT_RELOAD)) ]; then
 			loadConfig
-			blacklistAll
+			if [ $? -eq 0 ]; then
+				removeBlacklisting
+				blacklistAll
+			fi
+			NEXT_RELOAD=$(($CURRENT_TIME+$RELOAD_INTERVAL))
 		fi
-
-		let ITERATION++
 
 		sleep 1
 	done
+	removeBlacklisting
 	echo 100
 }
 
@@ -102,14 +115,24 @@ function osdNotifyLoop {
 }
 
 # Loop for reminding user about activating Alwork
-function remindStartLoop {
-	osdNotifyLoop "Alwork not started" "Alwork is currently not started. Remember to [re]activate it." 300
+function startRemindLoop {
+	if [ $NOTIFY_LOOP_PID -eq 0 ]; then
+		osdNotifyLoop "Alwork not started" "Alwork is currently not started. Remember to [re]activate it." 300 &
+		NOTIFY_LOOP_PID=$!
+	fi
+}
+
+# Stop remind loop
+function stopRemindLoop {
+	if [ $NOTIFY_LOOP_PID -ne 0 ]; then
+		kill $NOTIFY_LOOP_PID
+		NOTIFY_LOOP_PID=0
+	fi
 }
 
 
 # Send an email with the given title and message.
 function sendEmailNotification {
-	loadConfig
 	if [[ "$(command -v sendemail)" != "" && "${AW_FROM_EMAIL}" != "" && "${AW_FROM_EMAIL_PW}" != "" && "${AW_FROM_SERVER}" != "" && "${AW_TO_EMAIL}" != "" ]]; then
 		sendemail -f "$AW_FROM_NAME <${AW_FROM_EMAIL}>" -t "$AW_TO_EMAIL" -u "$1" -m "$2" -s $AW_FROM_SERVER -o tls="$AW_FROM_SERVER_TLS" -xu "$AW_FROM_EMAIL" -xp "$AW_FROM_EMAIL_PW" | zenity --progress --title="Sending notification" --text="Sending email notification to ${AW_TO_EMAIL}. Please wait." --pulsate --no-cancel --auto-close
 		return $?
@@ -124,48 +147,50 @@ if [ "$(id -u)" != "0" ]; then
 	loadConfig
 	gksudo --preserve-env "${0}"
 else
+	loadConfig
 	# Loop functionality until user decides to quit.
 	while [ 1 ]; do
 		# Remind user to re/start Alwork every 5 minutes
-		remindStartLoop &
-		NOTIFY_LOOP_PID=$!
+		startRemindLoop
 
 		# Prompt for work duration
 		TIME=$(zenity --entry --title="Work duration" --text="For how many hours will you work?")
 		ZENITY_EXIT_CODE=$?
 
-		kill -9 $NOTIFY_LOOP_PID
-
 		if [ $ZENITY_EXIT_CODE -eq 1 ]; then
 			zenity  --question --ok-label="Yes" --cancel-label="No" --text="Do you really want to quit ${TIME}?"
 			if [ $? -eq 0 ]; then
+				stopRemindLoop
 				exit 0
 			else
+				stopRemindLoop
 				continue
 			fi
 		fi
 
+		stopRemindLoop
+
 		if [ "${TIME}" != "" ]; then
-			# Sleep and handle 'cancel'
+			# Sleep and handle 'cancel' button
 			( (blacklistSleepHours ${TIME}) & echo $!) \
 			| (
-				read PIPED_PID; zenity --progress --auto-close --text="Working..." \
+				read PIPED_PID;
+				zenity --progress --auto-close --text="Working..." \
 				&& removeBlacklisting \
-				&& osdNotify "Break" "You may now have a break." && sleep 2 \
+				&& osdNotify "Break" "You may now have a break." \
+				&& sleep 2 \
 				|| (
 					kill ${PIPED_PID}
 
 					removeBlacklisting
 
 					# Possibly send an email notification
-					loadConfig
 					REASON=""
 					if [ "$AW_TO_EMAIL" != "" ]; then
 						while [ "${REASON}" == "" ]; do
-							remindStartLoop &
-							NOTIFY_LOOP_PID=$!
+							startRemindLoop
 							REASON=$(zenity --entry --title="Work cancelled" --text="For what reason?")
-							kill -9 $NOTIFY_LOOP_PID
+							stopRemindLoop
 						done
 						sendEmailNotification "Work cancelled" "${REASON}"
 					fi
